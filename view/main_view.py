@@ -145,4 +145,3 @@ class MainView(
             self.position_label.config(text=f"Ln {line}, Col {int(col) + 1}")
         except tk.TclError:
             pass
-
