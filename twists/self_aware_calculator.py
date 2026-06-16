@@ -1,6 +1,9 @@
 import tkinter as tk
 import random
 
+from utils import gemini_client
+
+
 class SelfAwareCalculatorTwist:
 
     def __init__(
@@ -28,6 +31,7 @@ class SelfAwareCalculatorTwist:
 
         self.expression = ""
 
+        # Fallback roasts kalau Gemini tidak tersedia / gagal
         self.roasts = [
             "Really?",
             "You needed a calculator for that?",
@@ -43,6 +47,8 @@ class SelfAwareCalculatorTwist:
             "I hope you have a backup calculator in case I break down.",
             "If you were any slower, you'd be going backwards."
         ]
+
+        self.use_ai = gemini_client.is_available()
 
         self.overlay_frame.place(
             relx=0,
@@ -140,7 +146,9 @@ class SelfAwareCalculatorTwist:
             anchor="w",
             font=("Arial", 11),
             padx=15,
-            pady=12
+            pady=12,
+            wraplength=760,
+            justify="left"
         )
 
         self.roast_label.pack(
@@ -229,15 +237,12 @@ class SelfAwareCalculatorTwist:
                 col = 0
                 row += 1
 
-    def button_pressed(
-        self,
-        value
-    ):
+    def button_pressed(self, value):
 
+        # Tampilkan roast statis dulu (instan), AI roast (jika ada)
+        # akan menyusul secara async dan menggantikan teks ini.
         self.roast_label.config(
-            text=random.choice(
-                self.roasts
-            )
+            text=random.choice(self.roasts)
         )
 
         if value == "C":
@@ -309,8 +314,40 @@ class SelfAwareCalculatorTwist:
                     text="Wrong answer. I literally calculated it for you."
                 )
 
+                self.maybe_show_ai_roast(user_answer)
+
         except:
 
             self.roast_label.config(
                 text="That doesn't even look like a number."
             )
+
+    def maybe_show_ai_roast(self, user_answer):
+        """
+        Generate roast dinamis via Gemini secara async.
+        Jika Gemini tidak tersedia, label tetap menampilkan teks
+        statis yang sudah di-set sebelumnya.
+        """
+
+        if not self.use_ai:
+            return
+
+        import threading
+
+        question = f"{self.num1} x {self.num2}"
+
+        def worker():
+
+            roast = gemini_client.generate_roast(
+                question,
+                user_answer,
+                self.correct_answer
+            )
+
+            if roast:
+                self.overlay_frame.after(
+                    0,
+                    lambda: self.roast_label.config(text=roast)
+                )
+
+        threading.Thread(target=worker, daemon=True).start()

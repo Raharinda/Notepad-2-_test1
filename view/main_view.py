@@ -1,365 +1,149 @@
 import tkinter as tk
+from tkinter import font as tkfont
 
-from twists.teleport_button import TeleportButtonTwist
-from twists.bloodmoon import BloodmoonTwist
-from twists.capslock_demon import CapslockDemonTwist
-from twists.self_aware_calculator import SelfAwareCalculatorTwist
-from twists.broken_calculator import BrokenCalculatorTwist
-from twists.lavaloon import LavaloonTwist
-from twists.black_hole import BlackHoleTwist
+from view.components import (
+    MenuBuilderMixin,
+    FileActionsMixin,
+    EditActionsMixin,
+    FindReplaceMixin,
+    FormatActionsMixin,
+    AIActionsMixin,
+    ExcuseActionsMixin,
+    TwistOrchestratorMixin,
+)
 
-class MainView:
 
-    def __init__(self, root, twist_manager):
+class MainView(
+    MenuBuilderMixin,
+    FileActionsMixin,
+    EditActionsMixin,
+    FindReplaceMixin,
+    FormatActionsMixin,
+    AIActionsMixin,
+    ExcuseActionsMixin,
+    TwistOrchestratorMixin,
+):
+    """
+    View utama Trolling Notepad.
 
+    Kelas ini hanya bertanggung jawab atas:
+      - Inisialisasi state
+      - Pembuatan widget (text area, status bar, overlay)
+      - Binding event utama
+
+    Semua logika bisnis/UI didelegasikan ke mixin masing-masing.
+    """
+
+    def __init__(self, root: tk.Tk, twist_manager):
         self.root = root
         self.twist_manager = twist_manager
 
         self.root.title("Notepad")
         self.root.geometry("800x600")
 
-        self.twist_active = False
+        # ── State ──────────────────────────────────────────────────────
+        self.twist_active: bool = False
+        self.current_file_path: str | None = None
 
-        # Notepad area
+        self.base_font_family = "Consolas"
+        self.base_font_size = 12
+        self.zoom_percent = 100
+
+        self.text_font = tkfont.Font(
+            family=self.base_font_family,
+            size=self.base_font_size,
+        )
+
+        self.word_wrap_var = tk.BooleanVar(value=True)
+        self.find_dialog: tk.Toplevel | None = None
+        self.last_search_index = "1.0"
+
+        # ── Widgets ────────────────────────────────────────────────────
+        self.build_menu_bar()
+        self._build_text_area()
+        self._build_status_bar()
+        self._build_overlay()
+        self._bind_events()
+
+        # ── Initial state ──────────────────────────────────────────────
+        self.update_title()
+        self.update_cursor_position()
+
+    # ------------------------------------------------------------------
+    # Widget builders (layout only — no logic)
+    # ------------------------------------------------------------------
+
+    def _build_text_area(self):
         self.text_area = tk.Text(
-            root,
-            font=("Consolas", 12),
-            wrap="word"
-        )
-
-        self.text_area.pack(
-            expand=True,
-            fill="both"
-        )
-
-        # Overlay (hidden by default)
-        self.overlay_frame = tk.Frame(
             self.root,
-            bg="#202020"
+            font=self.text_font,
+            wrap="word",
+            undo=True,
+            autoseparators=True,
+            maxundo=-1,
+        )
+        self.text_area.pack(expand=True, fill="both")
+
+        self.text_area.tag_configure(
+            "search_highlight",
+            background="#ffd54f",
+            foreground="black",
         )
 
-        # Detect typing
-        self.text_area.bind(
-            "<KeyRelease>",
-            self.on_text_changed
-        )
+    def _build_status_bar(self):
+        self.status_bar = tk.Frame(self.root)
+        self.status_bar.pack(fill="x", side="bottom")
 
-        # Status bar
+        # Kiri: progres twist (direferensikan langsung oleh BloodmoonTwist)
         self.status_label = tk.Label(
-            root,
+            self.status_bar,
             text="Twists Completed: 0/3",
-            anchor="w"
+            anchor="w",
         )
+        self.status_label.pack(side="left", padx=8)
 
-        self.status_label.pack(
-            fill="x",
-            side="bottom"
+        # Kanan: zoom %
+        self.zoom_label = tk.Label(
+            self.status_bar,
+            text="100%",
+            anchor="e",
+            width=6,
         )
+        self.zoom_label.pack(side="right", padx=8)
 
-    def on_text_changed(self, event):
-
-        if self.twist_active:
-            return
-        
-        if (self.twist_manager.completed_twists >= 3):
-            return
-
-        current_text = self.text_area.get(
-            "1.0",
-            "end-1c"
+        # Kanan: posisi kursor
+        self.position_label = tk.Label(
+            self.status_bar,
+            text="Ln 1, Col 1",
+            anchor="e",
+            width=15,
         )
-
-        character_count = len(current_text)
-
-        # print(
-        #     f"Characters: {character_count}"
-        # )
-
-        if self.twist_manager.should_trigger_twist(
-            character_count
-        ):
-            self.trigger_twist()
-
-    def trigger_twist(self):
-
-        self.twist_active = True
-
-        twist_name = (
-            self.twist_manager
-            .get_current_twist()
-        )
-
-        objective = (
-            self.twist_manager
-            .get_current_objective()
-        )
-
-        self.show_warning_overlay(
-            twist_name,
-            objective
-        )
-
-        print(
-            f"Starting twist: {twist_name}"
-        )
-
-    def fake_twist(self):
-
-        twist_name = (
-            self.twist_manager
-            .get_current_twist()
-        )
-
-        if twist_name == "Teleporting Button":
-
-            TeleportButtonTwist(
-                self.overlay_frame,
-                self.finish_twist
-            )
-
-        elif twist_name == "Bloodmoon":
-
-            BloodmoonTwist(
-                self,
-                self.finish_twist
-            )
-        
-        elif twist_name == "Capslock Demon":
-
-            CapslockDemonTwist(
-                self.overlay_frame,
-                self.finish_twist
-            )
-
-        elif twist_name == "Self Aware Calculator":
-
-            SelfAwareCalculatorTwist(
-                self.overlay_frame,
-                self.finish_twist
-            )
-
-        elif twist_name == "Broken Calculator":
-
-            BrokenCalculatorTwist(
-                self.overlay_frame,
-                self.finish_twist
-            )
-            
-        elif twist_name == "Lavaloon":
-
-            LavaloonTwist(
-                self.overlay_frame,
-                self.finish_twist,
-                self.retry_current_twist
-            )
-
-        elif twist_name == "Black Hole":
-
-            BlackHoleTwist(
-                self.overlay_frame,
-                self.finish_twist,
-                self.retry_current_twist
-            )
-
-        else:
-
-            print(
-                f"{twist_name} not implemented yet"
-            )
-
-            self.finish_twist()
-
-    def finish_twist(self):
-
-        self.twist_active = False
-
-        self.twist_manager.complete_current_twist()
-
-        completed = (self.twist_manager.completed_twists)
-        
-        self.update_twist_progress(
-            completed
-        )
-
-        self.hide_overlay()
-        
-        if completed >= 3:
-            self.show_victory_screen()
-
-    def update_twist_progress(self, completed):
-
-        self.status_label.config(
-            text=f"Twists Completed: {completed}/3"
-        )
-
-    def show_warning_overlay(
-        self,
-        twist_name,
-        objective
-        ):
-
-
-        self.overlay_frame.place(
-            relx=0,
-            rely=0,
-            relwidth=1,
-            relheight=1
-        )
-
-        warning_title = tk.Label(
-            self.overlay_frame,
-            text="⚠ WARNING ⚠",
-            font=("Arial", 24, "bold"),
-            fg="red",
-            bg="#202020"
-        )
-
-        warning_title.place(
-            relx=0.5,
-            rely=0.3,
-            anchor="center"
-        )
-
-        twist_label = tk.Label(
-            self.overlay_frame,
-            text=twist_name,
-            font=("Arial", 18, "bold"),
-            fg="white",
-            bg="#202020"
-        )
-
-        twist_label.place(
-            relx=0.5,
-            rely=0.45,
-            anchor="center"
-        )
-
-        objective_label = tk.Label(
-            self.overlay_frame,
-            text=objective,
-            font=("Arial", 12),
-            fg="white",
-            bg="#202020"
-        )
-
-        objective_label.place(
-            relx=0.5,
-            rely=0.6,
-            anchor="center"
-        )
-
-        self.root.after(
-            2000,
-            self.start_twist_after_warning
-        )
-
-    def start_twist_after_warning(self):
-
-
-        for widget in self.overlay_frame.winfo_children():
-            widget.destroy()
-
-        self.fake_twist()
-
-
-    
-    def hide_overlay(self):
-
-        self.overlay_frame.place_forget()
-        
-    def show_victory_screen(self):
-
-        self.overlay_frame.place(
-            relx=0,
-            rely=0,
-            relwidth=1,
-            relheight=1
-        )
-
-        victory_text = """
-
-    =================================
-
-    CONGRATULATIONS
-
-    You survived Notepad.
-
-    The notebook seems satisfied...
-    for now.
-
-    [ENTER] Continue writing
-    [ESC] Close session
-
-    =================================
-    """
-
-        label = tk.Label(
-            self.overlay_frame,
-            text=victory_text,
-            font=("Consolas", 14),
-            bg="#202020",
-            fg="white",
-            justify="center"
-        )
-
-        label.place(
-            relx=0.5,
-            rely=0.5,
-            anchor="center"
-        )
-
-        self.root.bind(
-            "<Return>",
-            self.continue_after_victory
-        )
-
-        self.root.bind(
-            "<Escape>",
-            self.close_session
-        )
-
-    def continue_after_victory(
-        self,
-        event=None
-    ):
-
-        self.root.unbind(
-            "<Return>"
-        )
-
-        self.root.unbind(
-            "<Escape>"
-        )
-
-        self.hide_overlay()
-
-    def close_session(
-        self,
-        event=None
-    ):
-
-        self.root.destroy()
-
-    def retry_current_twist(self):
-
-        self.twist_active = True
-
-        for widget in (
-            self.overlay_frame.winfo_children()
-        ):
-            widget.destroy()
-
-        twist_name = (
-            self.twist_manager
-            .get_current_twist()
-        )
-
-        objective = (
-            self.twist_manager
-            .get_current_objective()
-        )
-
-        self.show_warning_overlay(
-            twist_name,
-            objective
-        )
+        self.position_label.pack(side="right", padx=8)
+
+    def _build_overlay(self):
+        """Frame transparan yang di-place di atas text_area saat twist aktif."""
+        self.overlay_frame = tk.Frame(self.root, bg="#202020")
+
+    def _bind_events(self):
+        ta = self.text_area
+
+        # Twist trigger + cursor position (keduanya pada KeyRelease)
+        ta.bind("<KeyRelease>", self.on_text_changed)
+        ta.bind("<KeyRelease>", self.update_cursor_position, add="+")
+        ta.bind("<ButtonRelease-1>", self.update_cursor_position)
+
+        # Zoom via Ctrl+scroll (Windows/macOS dan Linux)
+        ta.bind("<Control-MouseWheel>", self.on_ctrl_mousewheel)
+        ta.bind("<Control-Button-4>", lambda e: self.zoom_in())
+        ta.bind("<Control-Button-5>", lambda e: self.zoom_out())
+
+    # ------------------------------------------------------------------
+    # Status bar helper (dipakai oleh mixin lain)
+    # ------------------------------------------------------------------
+
+    def update_cursor_position(self, event=None):
+        try:
+            line, col = self.text_area.index("insert").split(".")
+            self.position_label.config(text=f"Ln {line}, Col {int(col) + 1}")
+        except tk.TclError:
+            pass

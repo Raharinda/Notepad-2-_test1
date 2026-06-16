@@ -1,19 +1,19 @@
 import tkinter as tk
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from view.main_view import MainView
 from controller.twist_manager import TwistManager
 
-root = tk.Tk()
 
-manager = TwistManager()
+def main():
+    root = tk.Tk()
+    manager = TwistManager()
+    MainView(root, manager)
+    root.mainloop()
 
-print("Selected Twists:")
-for twist in manager.selected_twists:
-    print("-", twist)
 
-app = MainView(
-    root,
-    manager
-    )
+if __name__ == "__main__":
+    main()
 
-root.mainloop()
