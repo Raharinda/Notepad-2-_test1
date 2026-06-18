@@ -68,6 +68,8 @@ class MainView(
         # ── Initial state ──────────────────────────────────────────────
         self.update_title()
         self.update_cursor_position()
+        self.update_trigger_progress(0)
+        self.update_difficulty_display()
 
     # ------------------------------------------------------------------
     # Widget builders (layout only — no logic)
@@ -102,6 +104,22 @@ class MainView(
         )
         self.status_label.pack(side="left", padx=8)
 
+        self.trigger_progress_label = tk.Label(
+            self.status_bar,
+            text="Progress to next twist: 0/0",
+            anchor="w",
+        )
+        self.trigger_progress_label.pack(side="left", padx=8)
+
+        # Difficulty indicator (center-left)
+        self.difficulty_label = tk.Label(
+            self.status_bar,
+            text="Difficulty: Normal",
+            anchor="w",
+            foreground="#ffa500",
+        )
+        self.difficulty_label.pack(side="left", padx=8)
+
         # Kanan: zoom %
         self.zoom_label = tk.Label(
             self.status_bar,
@@ -127,8 +145,8 @@ class MainView(
     def _bind_events(self):
         ta = self.text_area
 
-        # Twist trigger + cursor position (keduanya pada KeyRelease)
-        ta.bind("<KeyRelease>", self.on_text_changed)
+        # Touch every key instantaneously, then read content after Tk updates it.
+        ta.bind("<Key>", lambda e: self.root.after_idle(self.on_text_changed))
         ta.bind("<KeyRelease>", self.update_cursor_position, add="+")
         ta.bind("<ButtonRelease-1>", self.update_cursor_position)
 
@@ -147,3 +165,20 @@ class MainView(
             self.position_label.config(text=f"Ln {line}, Col {int(col) + 1}")
         except tk.TclError:
             pass
+
+    def update_trigger_progress(self, char_count: int):
+        try:
+            progress, target = self.twist_manager.get_trigger_progress(char_count)
+            self.trigger_progress_label.config(
+                text=f"Progress to next twist: {progress}/{target}"
+            )
+        except AttributeError:
+            self.trigger_progress_label.config(text="Progress to next twist: 0/0")
+
+    def update_difficulty_display(self):
+        """Update UI dengan difficulty level saat ini."""
+        try:
+            difficulty_text = self.twist_manager.get_difficulty_display()
+            self.difficulty_label.config(text=f"Difficulty: {difficulty_text}")
+        except AttributeError:
+            self.difficulty_label.config(text="Difficulty: Normal")

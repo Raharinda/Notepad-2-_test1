@@ -10,6 +10,12 @@ Menambah twist baru cukup:
   4. Daftarkan nama + objective di TwistManager
 
 Tidak perlu menyentuh MainView sama sekali.
+
+Semua twist sekarang menerima parameter `difficulty` (int, default 0)
+yang dipakai untuk scaling kesulitan internal masing-masing twist.
+Nilai ini diisi dari `twist_manager.completed_twists` oleh
+TwistOrchestratorMixin — makin banyak twist yang sudah diselesaikan,
+makin tinggi nilainya.
 """
 
 from twists.teleport_button import TeleportButtonTwist
@@ -21,7 +27,7 @@ from twists.lavaloon import LavaloonTwist
 from twists.black_hole import BlackHoleTwist
 
 # ---------------------------------------------------------------------------
-# Twist yang menerima (overlay_frame, finish_cb)
+# Twist yang menerima (overlay_frame, finish_cb, difficulty)
 # ---------------------------------------------------------------------------
 _OVERLAY_TWISTS: dict[str, type] = {
     "Teleporting Button": TeleportButtonTwist,
@@ -30,13 +36,13 @@ _OVERLAY_TWISTS: dict[str, type] = {
     "Broken Calculator": BrokenCalculatorTwist,
 }
 
-# Twist yang menerima (overlay_frame, finish_cb, retry_cb)
+# Twist yang menerima (overlay_frame, finish_cb, retry_cb, difficulty)
 _OVERLAY_RETRY_TWISTS: dict[str, type] = {
     "Lavaloon": LavaloonTwist,
     "Black Hole": BlackHoleTwist,
 }
 
-# Twist yang menerima (main_view, finish_cb)  — mengakses UI root secara langsung
+# Twist yang menerima (main_view, finish_cb, difficulty) — mengakses UI root langsung
 _MAINVIEW_TWISTS: dict[str, type] = {
     "Bloodmoon": BloodmoonTwist,
 }
@@ -47,6 +53,7 @@ def launch(
     main_view,          # MainView instance
     finish_callback,
     retry_callback,
+    difficulty: int = 0,
 ) -> bool:
     """
     Instantiate dan jalankan twist yang sesuai.
@@ -59,6 +66,7 @@ def launch(
         _OVERLAY_TWISTS[twist_name](
             main_view.overlay_frame,
             finish_callback,
+            difficulty=difficulty,
         )
         return True
 
@@ -67,6 +75,7 @@ def launch(
             main_view.overlay_frame,
             finish_callback,
             retry_callback,
+            difficulty=difficulty,
         )
         return True
 
@@ -74,8 +83,8 @@ def launch(
         _MAINVIEW_TWISTS[twist_name](
             main_view,
             finish_callback,
+            difficulty=difficulty,
         )
         return True
 
     return False
-

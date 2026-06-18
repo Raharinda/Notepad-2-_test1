@@ -26,6 +26,7 @@ class TwistOrchestratorMixin:
             return
 
         char_count = len(self.text_area.get("1.0", "end-1c"))
+        self.update_trigger_progress(char_count)
 
         if self.twist_manager.should_trigger_twist(char_count):
             self._trigger_twist()
@@ -70,16 +71,23 @@ class TwistOrchestratorMixin:
         self.root.after(2000, self._launch_current_twist)
 
     def _launch_current_twist(self):
-        for widget in self.overlay_frame.winfo_children():
-            widget.destroy()
+        try:
+            for widget in list(self.overlay_frame.winfo_children()):
+                if widget.winfo_exists():
+                    widget.destroy()
+        except tk.TclError:
+            pass
 
+        self.twist_manager.start_twist_timer()
         twist_name = self.twist_manager.get_current_twist()
+        difficulty = self.twist_manager.get_difficulty()
 
         launched = twist_registry.launch(
             twist_name,
             main_view=self,
             finish_callback=self.finish_twist,
             retry_callback=self.retry_current_twist,
+            difficulty=difficulty,
         )
 
         if not launched:
@@ -99,13 +107,24 @@ class TwistOrchestratorMixin:
 
         completed = self.twist_manager.completed_twists
         self.update_twist_progress(completed)
+        self.update_difficulty_display()
         self.hide_overlay()
 
     def retry_current_twist(self):
+        char_count = len(self.text_area.get("1.0", "end-1c"))
+        should_reset_difficulty = self.twist_manager.fail_current_twist(char_count)
+        
+        if should_reset_difficulty:
+            self.update_difficulty_display()
+        
         self.twist_active = True
 
-        for widget in self.overlay_frame.winfo_children():
-            widget.destroy()
+        try:
+            for widget in list(self.overlay_frame.winfo_children()):
+                if widget.winfo_exists():
+                    widget.destroy()
+        except tk.TclError:
+            pass
 
         twist_name = self.twist_manager.get_current_twist()
         objective = self.twist_manager.get_current_objective()

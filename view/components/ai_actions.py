@@ -61,9 +61,19 @@ class AIActionsMixin:
         self.update_twist_progress(completed)
 
         if result is None:
+            error_message = getattr(gemini_client, 'get_last_error', lambda: None)()
+            if error_message and ('RESOURCE_EXHAUSTED' in error_message or '429' in error_message):
+                user_message = (
+                    "Quota Gemini terlampaui. Periksa plan/billing dan tunggu beberapa saat sebelum mencoba lagi."
+                )
+            else:
+                user_message = (
+                    "Gagal mendapatkan respons dari Gemini. Cek koneksi / API key."
+                )
+
             messagebox.showerror(
                 "AI Error",
-                "Gagal mendapatkan respons dari Gemini. Cek koneksi / API key.",
+                user_message,
             )
             return
 

@@ -71,15 +71,18 @@ def _get_tone_instruction(tone: str) -> str:
     tone_instructions = {
         "serious": (
             "Gunakan nada serius, profesional, dan sopan. "
+            "Tulis excuse yang masuk akal, manusiawi, dan mudah dipercaya. "
             "Jangan bercanda; excuse harus terdengar paling aman dipakai."
         ),
         "normal": (
-            "Gunakan nada normal: masuk akal, sopan, dan tambahkan humor "
-            "ringan yang natural sebagai bumbu kecil."
+            "Gunakan nada normal: masuk akal, sopan, dan tulis seperti "
+            "seorang manusia yang sedang menjelaskan keadaan. "
+            "Hindari absurditas atau alasan yang berlebihan."
         ),
         "absurd": (
-            "Gunakan nada absurd dan lucu, tetapi tetap tulis sebagai satu "
-            "excuse yang bisa dibaca manusia. Boleh aneh, jangan kasar."
+            "Gunakan nada absurd, tetapi tetap tulis excuse yang bisa dibaca "
+            "dan tidak terkesan seperti lelucon. Boleh aneh, tapi tetap harus "
+            "masuk akal dalam konteks humor ringan."
         ),
     }
 
@@ -111,6 +114,8 @@ def generate_ai_excuse(
     prompt = (
         "Buat SATU excuse singkat dalam Bahasa Indonesia untuk alasan "
         "terlambat, belum mengerjakan tugas, atau butuh waktu tambahan. "
+        "Tulis dengan gaya manusiawi dan masuk akal; hindari alasan yang "
+        "terlalu absurd atau tidak mungkin. "
         "Jangan menyalahkan kelompok tertentu dan jangan tambahkan "
         "penjelasan. Hanya kembalikan kalimat excuse-nya saja. "
         "Buat jawaban yang berbeda dari request sebelumnya.\n\n"

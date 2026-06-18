@@ -20,9 +20,13 @@ class ExcuseActionsMixin:
             return
 
         try:
-            context = self.text_area.get("sel.first", "sel.last")
+            selected_context = self.text_area.get("sel.first", "sel.last")
         except tk.TclError:
-            context = self.text_area.get("1.0", "end-1c")
+            selected_context = ""
+
+        context = self._prompt_excuse_context(selected_context)
+        if context is None:
+            return
 
         category = self.excuse_category_var.get()
         tone = self.excuse_tone_var.get()
@@ -36,6 +40,47 @@ class ExcuseActionsMixin:
             args=(category, tone, context),
             daemon=True,
         ).start()
+
+    def _prompt_excuse_context(self, initial_context: str) -> str | None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Konteks Excuse")
+        dialog.geometry("480x260")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        tk.Label(
+            dialog,
+            text=(
+                "Masukkan konteks singkat untuk excuse.\n"
+                "Contoh: 'Telat kerja karena macet', 'Belum selesai tugas kantor', atau 'Minta perpanjangan deadline'."
+            ),
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", padx=10, pady=(10, 0))
+
+        context_text = tk.Text(dialog, wrap="word", height=8)
+        context_text.pack(expand=True, fill="both", padx=10, pady=10)
+        if initial_context.strip():
+            context_text.insert("1.0", initial_context.strip())
+
+        result = {"value": None}
+
+        def on_generate():
+            result["value"] = context_text.get("1.0", "end-1c").strip()
+            dialog.destroy()
+
+        def on_cancel():
+            dialog.destroy()
+
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+        tk.Button(button_frame, text="Generate", command=on_generate).pack(side="right")
+        tk.Button(button_frame, text="Cancel", command=on_cancel).pack(side="right", padx=(0, 8))
+
+        context_text.focus_set()
+        dialog.wait_window()
+        return result["value"]
 
     def _excuse_worker(self, category, tone, context):
         result = generate_ai_excuse(
@@ -51,13 +96,20 @@ class ExcuseActionsMixin:
         self.update_twist_progress(self.twist_manager.completed_twists)
 
         if result is None:
-            self._show_excuse_dialog(
-                "Gagal membuat excuse dari Gemini. Cek koneksi atau API key.",
-                loading=False,
-            )
+            error_message = getattr(gemini_client, 'get_last_error', lambda: None)()
+            if error_message and ('RESOURCE_EXHAUSTED' in error_message or '429' in error_message):
+                user_message = (
+                    "Quota Gemini terlampaui. Periksa plan/billing dan tunggu beberapa saat sebelum mencoba lagi."
+                )
+            else:
+                user_message = (
+                    "Gagal membuat excuse dari Gemini. Cek koneksi atau API key."
+                )
+
+            self._show_excuse_dialog(user_message, loading=False)
             messagebox.showerror(
                 "Excuse Generator Error",
-                "Gagal membuat excuse dari Gemini. Cek koneksi atau API key.",
+                user_message,
             )
             return
 

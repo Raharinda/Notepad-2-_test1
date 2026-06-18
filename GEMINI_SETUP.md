@@ -71,6 +71,17 @@ Available: True
 - The model used is **`gemini-2.5-flash`** (defined in `utils/gemini_client.py`, variable `_MODEL_NAME`).
 - All API call logic lives in a single file: **`utils/gemini_client.py`**. If you need to change the model or add new prompts, edit this file only.
 
+### Using a different / self-hosted API
+
+If you have a different AI HTTP endpoint (self-hosted or another provider), you can configure the project to use it instead of Gemini by adding these to your `.env`:
+
+```
+NEW_API_URL=https://your-api.example/v1/generate
+NEW_API_KEY=your-api-key-if-needed
+```
+
+When `NEW_API_URL` is present, the `utils` package will prefer it and the existing functions (`generate_text()`, `rewrite_text()`, etc.) will delegate to the generic HTTP client. The generic client expects a JSON POST with `prompt` and `max_tokens` fields; adapt `utils/new_api_client.py` if your provider needs a different payload.
+
 ---
 
 ## 7. Related File Structure

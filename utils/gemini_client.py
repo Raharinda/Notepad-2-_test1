@@ -19,12 +19,8 @@ saat fitur AI dipakai.
 """
 
 import os
-
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+import time
+import random
 
 try:
     from google import genai
@@ -36,30 +32,51 @@ except ImportError:
 
 _MODEL_NAME = "gemini-2.5-flash"
 _client = None
+_cached_api_key = None
+_last_error = None
+
+# Retry/backoff defaults (can be overridden via environment variables)
+_DEFAULT_MAX_RETRIES = 3
+_BACKOFF_BASE = 1.0
+_BACKOFF_JITTER = 0.5
 
 
 def _get_client():
 
-    global _client
+    global _client, _cached_api_key
 
-    if _client is not None:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+
+    if _client is not None and api_key == _cached_api_key:
         return _client
 
     if not _GENAI_AVAILABLE:
         return None
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-
-    if not api_key:
-        return None
-
+    _cached_api_key = api_key
     _client = genai.Client(api_key=api_key)
 
     return _client
 
 
+# New API detection (if you set NEW_API_URL in .env, we'll prefer it)
+_NEW_API_URL = os.environ.get("NEW_API_URL")
+_NEW_API_KEY = os.environ.get("NEW_API_KEY")
+
+try:
+    from utils import new_api_client
+except Exception:
+    new_api_client = None
+
+
 def is_available():
     """Cek apakah Gemini siap dipakai (library + API key tersedia)."""
+    # Available if new API is configured, or the Gemini SDK + key is available
+    if _NEW_API_URL:
+        return True
+
     return _get_client() is not None
 
 
@@ -79,34 +96,80 @@ def _build_generation_config(max_output_tokens, temperature=None):
     return genai_types.GenerateContentConfig(**config)
 
 
+def get_last_error() -> str | None:
+    return _last_error
+
+
 def generate_text(prompt, max_output_tokens=512, temperature=None):
     """
     Kirim prompt ke Gemini dan kembalikan teks hasil.
     Mengembalikan None jika Gemini tidak tersedia / terjadi error.
     """
 
+    # If a NEW_API_URL is configured, delegate to the generic HTTP client.
+    if _NEW_API_URL and new_api_client is not None:
+        return new_api_client.generate_text(_NEW_API_URL, _NEW_API_KEY, prompt,
+                                            max_output_tokens, temperature)
+
     client = _get_client()
 
     if client is None:
         return None
 
+    # Allow overriding retry behavior via environment for flexibility in tests
     try:
+        max_attempts = int(os.environ.get("GEMINI_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
+    except Exception:
+        max_attempts = _DEFAULT_MAX_RETRIES
 
-        response = client.models.generate_content(
-            model=_MODEL_NAME,
-            contents=prompt,
-            config=_build_generation_config(max_output_tokens, temperature)
-        )
+    try:
+        backoff_base = float(os.environ.get("GEMINI_BACKOFF_BASE", _BACKOFF_BASE))
+    except Exception:
+        backoff_base = _BACKOFF_BASE
 
-        if not response.text:
-            return None
+    try:
+        backoff_jitter = float(os.environ.get("GEMINI_BACKOFF_JITTER", _BACKOFF_JITTER))
+    except Exception:
+        backoff_jitter = _BACKOFF_JITTER
 
-        return response.text.strip()
+    global _last_error
 
-    except Exception as e:
+    for attempt in range(max_attempts):
+        try:
+            response = client.models.generate_content(
+                model=_MODEL_NAME,
+                contents=prompt,
+                config=_build_generation_config(max_output_tokens, temperature)
+            )
 
-        print(f"[Gemini Error] {e}")
-        return None
+            if not response.text:
+                _last_error = "Gemini merespons tanpa teks hasil."
+                return None
+
+            _last_error = None
+            return response.text.strip()
+
+        except Exception as e:
+            error_text = str(e)
+            _last_error = error_text
+
+            if "RESOURCE_EXHAUSTED" in error_text or "429" in error_text:
+                print(
+                    "[Gemini Error] Quota exceeded or rate limit reached. "
+                    "Periksa plan, billing, dan batas penggunaan API Anda."
+                )
+                print(f"[Gemini Details] {error_text}")
+                return None
+
+            last = (attempt == max_attempts - 1)
+            if last:
+                print(f"[Gemini Error] {e}")
+                return None
+
+            # Exponential backoff with jitter
+            backoff = backoff_base * (2 ** attempt) + random.uniform(0, backoff_jitter)
+            time.sleep(backoff)
+            continue
 
 
 # ==========================================================
