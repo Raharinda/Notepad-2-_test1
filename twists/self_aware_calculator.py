@@ -81,6 +81,7 @@ class SelfAwareCalculatorTwist:
         self.timer_job = None
         self.idle_check_job = None
         self.glow_job = None
+        self.resize_job = None
         self.finished = False
 
         self._last_expression_len = 0
@@ -120,7 +121,7 @@ class SelfAwareCalculatorTwist:
         self.overlay_frame.after(10, self._draw_header_gradient)
 
         self.question_text_id = None
-        self.overlay_frame.bind("<Configure>", lambda e: self._draw_header_gradient())
+        self.overlay_frame.bind("<Configure>", lambda e: self._debounce_redraw())
 
         answer_frame = tk.Frame(self.overlay_frame, bg="#1c1c1c")
         answer_frame.pack(fill="x")
@@ -163,9 +164,20 @@ class SelfAwareCalculatorTwist:
 
         self.create_buttons()
 
+    def _debounce_redraw(self):
+        if self.resize_job is not None:
+            try:
+                self.overlay_frame.after_cancel(self.resize_job)
+            except (ValueError, tk.TclError):
+                pass
+        self.resize_job = self.overlay_frame.after(100, self._draw_header_gradient)
+
     def _draw_header_gradient(self):
+        if self.finished:
+            return
+
         self.header_canvas.delete("all")
-        width = self.header_canvas.winfo_width() or 800
+        width = max(200, self.header_canvas.winfo_width())
         height = 70
 
         steps = 30
@@ -261,7 +273,7 @@ class SelfAwareCalculatorTwist:
 
         self.time_remaining_ms -= 100
 
-        bar_width = self.timer_bar.winfo_width() or 760
+        bar_width = max(200, self.timer_bar.winfo_width())
         ratio = max(0, self.time_remaining_ms / self.time_limit_ms)
 
         if ratio > 0.5:
@@ -423,6 +435,11 @@ class SelfAwareCalculatorTwist:
         if self.glow_job is not None:
             try:
                 self.overlay_frame.after_cancel(self.glow_job)
+            except (ValueError, tk.TclError):
+                pass
+        if self.resize_job is not None:
+            try:
+                self.overlay_frame.after_cancel(self.resize_job)
             except (ValueError, tk.TclError):
                 pass
 
